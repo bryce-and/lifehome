@@ -1,6 +1,6 @@
 # Home Base
 
-A personal life tracker PWA: spaces (Work, Life, ...) with daily and weekly checklists that reset automatically, a Home score, journal, photo widget, quick links, and heavy theming (liquid glass, neon rings, fonts, backgrounds).
+A personal life tracker PWA: spaces (Work, Life, ...) with daily and weekly checklists that reset automatically, a Home score, photo widget, quick links, and heavy theming (liquid glass, neon rings, fonts, backgrounds).
 
 No build step. Data lives in your browser's localStorage.
 

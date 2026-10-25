@@ -40,7 +40,8 @@ const ICON_PATHS = {
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>',
   sparkle: '<path d="M12 3v5M12 16v5M3 12h5M16 12h5M6 6l3 3M15 15l3 3M18 6l-3 3M9 15l-3 3"/>',
 };
-const SPACE_COLORS = ['#7c8cff', '#2dffb2', '#ff4fd8', '#ffd23f', '#38d9ff', '#c084fc']; // neon
+const SPACE_COLORS = ['#7c8cff', '#2dffb2', '#ff4fd8', '#ffd23f', '#38d9ff', '#ff8a3d']; // neon, six clearly different hues
+const COLOR_PRESETS = SPACE_COLORS;
 const spaceColor = sp => sp.color || SPACE_COLORS[Math.max(0, state.spaces.indexOf(sp)) % SPACE_COLORS.length];
 const SPACE_ICONS = ['briefcase', 'home', 'leaf', 'heart', 'book', 'star', 'bolt', 'target', 'sun', 'sparkle'];
 const EMOJI_TO_ICON = { '💼': 'briefcase', '🌿': 'leaf', '🌤️': 'sun', '☀️': 'sun', '🧺': 'home', '🏡': 'home', '💪': 'bolt', '✨': 'sparkle', '❤️': 'heart', '📚': 'book' };
@@ -52,7 +53,7 @@ const L = (name, cadence, items, askNote = false) => ({ name, cadence, askNote, 
 
 const TEMPLATES = [
   {
-    id: 'pm', name: 'Remote project manager', icon: 'briefcase',
+    id: 'pm', name: 'Work', icon: 'briefcase',
     desc: 'Morning kickoff, through-the-day follow-ups, shutdown, plus a weekly rhythm.',
     lists: [
       L('Morning kickoff', 'daily', [
@@ -298,7 +299,7 @@ function seed() {
     v: 3, name: '', created: todayKey(),
     spaces: [work, life],
     lists: [...instantiateLists(work.id, pm.lists), ...instantiateLists(life.id, [...mo.lists, ...rs.lists])],
-    log: {}, journal: {}, theme: { ...DEFAULT_THEME }, home: { upNext: true, pulse: true },
+    log: {}, theme: { ...DEFAULT_THEME }, home: { upNext: true, pulse: true },
   };
 }
 
@@ -310,8 +311,7 @@ function ensureInbox(s) {
     s.v = 3;
   }
   s.theme = { ...DEFAULT_THEME, ...s.theme };
-  s.home = { upNext: true, pulse: true, photo: true, journal: true, photoPos: { x: 50, y: 50 }, photoCaption: '', ...s.home };
-  s.jtags ??= {};
+  s.home = { upNext: true, pulse: true, photo: true, photoPos: { x: 50, y: 50 }, photoCaption: '', ...s.home };
   s.spaces.forEach(sp => { sp.icon = iconName(sp); delete sp.emoji; sp.links ??= []; });
   if (!s.created) {
     const days = Object.keys(s.log || {}).filter(k => k.startsWith('d:')).map(k => k.slice(2)).sort();
@@ -588,6 +588,16 @@ function renderListCard(list, date, prefix = '') {
 /* ----- Home ----- */
 // Glass-tube neon rings: dark groove, glass walls, a gradient core with shade and sheen for depth,
 // a glowing end cap, and a glint that travels along the lit arc (driven by Motion on scroll/swipe/pointer).
+// More than three spaces: one liquid neon tube per space instead of concentric rings.
+function barsHTML(rows, all) {
+  const bars = rows.map(({ sp, td, color }) => `<a class="lbar" href="#/space/${sp.id}" style="--c:${color}">
+      <span class="lbar-top"><span class="ln">${esc(sp.name)}</span><span class="lc">${td.done}/${td.total}</span><b>${td.pct}%</b></span>
+      <span class="lbar-tube"><i style="width:${Math.max(td.pct, td.pct ? 4 : 0)}%"></i></span>
+    </a>`).join('');
+  return `<div class="score-bars" role="img" aria-label="Overall score ${all.pct ?? 0} percent">
+    <div class="bars-total"><b>${all.pct === null ? '–' : all.pct}<small>%</small></b><span>Today</span></div>${bars}</div>`;
+}
+
 function ringsSVG(ringRows) {
   const tint = (hex, to, amt) => { const n = parseInt(hex.slice(1), 16); return '#' + [n >> 16, (n >> 8) & 255, n & 255].map(v => Math.round(v + (to - v) * amt).toString(16).padStart(2, '0')).join(''); };
   // One tube per ring, drawn as a single object: dark glass channel, a lit fill, one specular line, one soft halo.
@@ -613,14 +623,6 @@ function ringsSVG(ringRows) {
 }
 
 const PHOTO_KEY = 'homebase.photo';
-const PROMPTS = [
-  "What's one thing that went well today?", 'What is taking up the most space in your head?', 'Who did you help, or who helped you?',
-  'What would make tomorrow a good day?', 'What did you learn today?', 'What are you avoiding, and why?', 'What are you looking forward to?',
-  'What deserves more of your attention?', 'What would you tell yourself a week ago?', 'What are you grateful for right now?',
-  'Where did your time actually go today?', 'What felt easy that used to feel hard?', 'What do you want to remember about today?', 'What can you let go of?',
-];
-const wordCount = t => (t.trim() ? t.trim().split(/\s+/).length : 0);
-
 // Photo in a glass pane. 3:2 crop with a movable focal point (Reposition), so faces and horizons stay in frame.
 function photoWidget() {
   if (!state.home.photo) return '';
@@ -643,41 +645,7 @@ function photoWidget() {
     </div>${pick}</section>`;
 }
 
-function addTag(date, raw) {
-  const tag = String(raw).trim().toLowerCase().replace(/^#+/, '').replace(/[^\w\- ]+/g, '').replace(/\s+/g, '-').slice(0, 24);
-  if (!tag) return;
-  const list = (state.jtags[date] ??= []);
-  if (!list.includes(tag)) list.push(tag);
-  save(); ui.focus = 'input[data-f="tagAdd"]'; render();
-}
-const tagCounts = () => { const c = {}; Object.values(state.jtags).flat().forEach(t => { c[t] = (c[t] || 0) + 1; }); return c; };
-
-function journalWidget(date) {
-  if (!state.home.journal) return '';
-  const text = state.journal[date] || '', tags = state.jtags[date] || [];
-  const prompt = PROMPTS[Math.floor(parse(date).getTime() / 864e5) % PROMPTS.length];
-  const count = Object.keys(state.journal).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k) && state.journal[k]).length;
-  const sugg = Object.entries(tagCounts()).filter(([t]) => !tags.includes(t)).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([t]) => t);
-  return `<section class="card journal-card">
-    <div class="card-head"><h3>Journal</h3><button class="btn small" data-act="journalAll">All entries${count ? ` (${count})` : ''}</button></div>
-    <div class="journal-body">
-      <div class="prompt">${esc(prompt)}</div>
-      <textarea class="journal" data-f="journal" data-key="${date}" placeholder="Write freely. It saves as you type.">${esc(text)}</textarea>
-      <div class="tags-row">${tags.map(t => `<span class="jtag">#${esc(t)}<button data-act="tagDel" data-tag="${esc(t)}" aria-label="Remove tag ${esc(t)}">×</button></span>`).join('')}<input class="tag-in" data-f="tagAdd" placeholder="Add a tag" aria-label="Add a tag" maxlength="24"></div>
-      ${sugg.length ? `<div class="tag-sugg">${sugg.map(t => `<button class="chip small" data-act="tagAdd" data-tag="${esc(t)}">#${esc(t)}</button>`).join('')}</div>` : ''}
-      <div class="journal-foot"><span class="wc">${wordCount(text)} words</span></div>
-    </div>
-  </section>`;
-}
-
-function journalAllModal() {
-  const counts = tagCounts(), f = ui.tagFilter && counts[ui.tagFilter] ? ui.tagFilter : null;
-  const keys = Object.keys(state.journal).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k) && state.journal[k] && (!f || (state.jtags[k] || []).includes(f))).sort().reverse();
-  modal(`<h2>Journal</h2><p>${keys.length ? 'Every entry you have written. Edit any of them here.' : f ? 'No entries with that tag.' : 'No entries yet. Write one on Home and it will show up here.'}</p>
-    ${Object.keys(counts).length ? `<div class="opt-row" style="margin-bottom:6px">${Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([t, n]) => `<button class="chip small${f === t ? ' on' : ''}" data-act="tagFilter" data-tag="${esc(t)}">#${esc(t)} ${n}</button>`).join('')}</div>` : ''}
-    ${keys.map(k => `<div class="entry"><div class="entry-head"><b>${esc(fmt(k, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' }))}</b>${(state.jtags[k] || []).length ? `<span>${state.jtags[k].map(t => '#' + esc(t)).join(' ')}</span>` : ''}<button class="icon-btn danger" data-act="journalDel" data-key="${k}" title="Delete entry" aria-label="Delete entry">✕</button></div><textarea data-f="journal" data-key="${k}">${esc(state.journal[k])}</textarea></div>`).join('')}
-    <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn primary" data-act="closeModal">Done</button></div>`);
-}
+const hasDaily = spaceId => state.lists.some(l => l.spaceId === spaceId && l.cadence === 'daily' && l.items.length);
 
 function viewHome() {
   const date = todayKey();
@@ -698,16 +666,16 @@ function viewHome() {
 
   // Overall score: one ring per space that has daily tasks (outermost first), combined percentage in the middle.
   const rows = vis.map((sp, i) => ({ sp, td: spaceDay(sp.id, date), color: colorOf(i) }));
-  const ringRows = rows.filter(r => r.td.total > 0).slice(0, 4);
+  const active = rows.filter(r => r.td.total > 0), useBars = active.length > 3, ringRows = active;
   const score = vis.length ? `<section class="score glass" data-glass data-bezel="32" data-scale="64" data-gblur="5">
-    <div class="score-ring n${ringRows.length}" style="--ring0:${ringRows[0]?.color || 'var(--accent)'}">
+    ${useBars ? barsHTML(active, all) : `<div class="score-ring n${ringRows.length}" style="--ring0:${ringRows[0]?.color || 'var(--accent)'}">
       <svg viewBox="0 0 240 240" role="img" aria-label="Overall score ${all.pct ?? 0} percent">${ringsSVG(ringRows)}</svg>
       <div class="score-center"><b>${all.pct === null ? '–' : all.pct}<small>%</small></b><span>Today</span></div>
-    </div>
+    </div>`}
     <div class="score-side">
       <div class="score-title">Today's score</div>
       <div class="score-sub">${all.total ? `${all.done} of ${all.total} required tasks` : 'No required tasks yet'}</div>
-      <div class="legend">${rows.filter(r => r.td.total > 0).map(({ sp, td, color }) => `<a class="legend-row" href="#/space/${sp.id}"><span class="dot" style="background:${color};color:${color}"></span><span class="ln">${esc(sp.name)}</span><span class="lc">${td.done}/${td.total}</span><b>${td.pct}%</b></a>`).join('')}</div>
+      ${useBars ? '' : `<div class="legend">${rows.filter(r => r.td.total > 0).map(({ sp, td, color }) => `<a class="legend-row" href="#/space/${sp.id}"><span class="dot" style="background:${color};color:${color}"></span><span class="ln">${esc(sp.name)}</span><span class="lc">${td.done}/${td.total}</span><b>${td.pct}%</b></a>`).join('')}</div>`}
       <div class="score-foot"><span><b>${tr.avg === null ? '–' : tr.avg + '%'}</b> 7-day avg</span><span><b>${tr.streak}</b> day streak</span></div>
     </div>
   </section>` : '';
@@ -716,6 +684,11 @@ function viewHome() {
   for (const l of state.lists) {
     if (l.cadence !== 'daily' || !l.spaceId || spaceById(l.spaceId)?.hidden) continue;
     for (const i of itemsFor(l, date)) if (!i.optional && !entry(l, i, date)?.done) next.push([l, i]);
+  }
+  // A space with no daily tasks is just things the user wants done sometime, so its open tasks show here too.
+  for (const l of state.lists) {
+    if (l.cadence === 'daily' || !l.spaceId || spaceById(l.spaceId)?.hidden || hasDaily(l.spaceId)) continue;
+    for (const i of l.items) if (!i.optional && !entry(l, i, date)?.done) next.push([l, i]);
   }
   const upNext = state.home.upNext ? `<section class="card upnext">
     <div class="card-head"><h3>Up next</h3><span class="badge">${next.length} left</span></div>
@@ -738,7 +711,7 @@ function viewHome() {
     <div class="home-grid">${homeSections({
       score,
       tiles: `<div class="tiles">${tiles}<button class="tile ghost" data-act="newSpace">${ico('plus', 22)}&nbsp;New space</button></div>`,
-      upnext: upNext, journal: journalWidget(date), photo: photoWidget(), pulse,
+      upnext: upNext, photo: photoWidget(), pulse,
     })}</div>
     ${ui.arrange ? '<button class="btn primary arrange-done" data-act="arrangeDone">Done</button>' : ''}`;
 }
@@ -780,9 +753,7 @@ function viewToday() {
       ${inbox.items.map(i => renderItem(inbox, i, date)).join('')}
     </section>` : ''}
     ${body}
-    ${weekCard}
-    <div class="group-title">Journal</div>
-    <textarea class="journal" data-f="journal" data-key="${date}" placeholder="Wins, thoughts, anything worth remembering from today.">${esc(state.journal[date] || '')}</textarea>`;
+    ${weekCard}`;
 }
 
 /* ----- Week ----- */
@@ -802,14 +773,11 @@ function viewWeek() {
     if (ls.length) wl += `<div class="group-title"><a href="#/space/${sp.id}">${ico(iconName(sp), 15)} ${esc(sp.name)}</a></div><div class="lists">${ls.map(l => renderListCard(l, ws)).join('')}</div>`;
   }
   const label = `${fmt(ws, { month: 'short', day: 'numeric' })} to ${fmt(addDays(ws, 6), { month: 'short', day: 'numeric' })}`;
-  const jk = 'w:' + ws;
   return `
     <div class="head"><div class="grow"><h1>Week</h1><div class="sub">${esc(label)}</div></div><button class="btn" data-act="weekSummary">Copy week summary</button></div>
     ${dateNav(true)}
     <div class="weekgrid">${grid}</div>
-    ${wl || '<div class="card"><div class="empty">No weekly lists yet. Add one in any space and set it to "Weekly".</div></div>'}
-    <div class="group-title">Week reflection</div>
-    <textarea class="journal" data-f="journal" data-key="${jk}" placeholder="What went well, what slipped, what to carry into next week.">${esc(state.journal[jk] || '')}</textarea>`;
+    ${wl || '<div class="card"><div class="empty">No weekly lists yet. Add one in any space and set it to "Weekly".</div></div>'}`;
 }
 
 /* ----- Space ----- */
@@ -819,7 +787,7 @@ function viewSpace(sp) {
   const tr = trend(sp.id), td = spaceDay(sp.id, ui.date);
   const head = ed
     ? `<div class="head"><div class="icon-wrap"><button class="icon-now" style="--sc:${spaceColor(sp)}" data-act="iconMenu" aria-haspopup="true" aria-expanded="${!!ui.iconMenu}" aria-label="Change icon" title="Change icon">${ico(iconName(sp), 26)}</button>
-         ${ui.iconMenu ? `<div class="icon-pop glass" data-glass data-bezel="18" data-scale="34" data-gblur="10" role="radiogroup" aria-label="Icon">${SPACE_ICONS.map(n => `<button class="icon-opt${iconName(sp) === n ? ' on' : ''}" data-act="setIcon" data-space="${sp.id}" data-v="${n}" role="radio" aria-checked="${iconName(sp) === n}" aria-label="${n}" title="${n}">${ico(n, 20)}</button>`).join('')}</div>` : ''}</div>
+         ${ui.iconMenu ? `<div class="icon-pop glass" data-glass data-bezel="18" data-scale="34" data-gblur="10" role="radiogroup" aria-label="Icon">${SPACE_ICONS.map(n => `<button class="icon-opt${iconName(sp) === n ? ' on' : ''}" data-act="setIcon" data-space="${sp.id}" data-v="${n}" role="radio" aria-checked="${iconName(sp) === n}" aria-label="${n}" title="${n}">${ico(n, 20)}</button>`).join('')}<div class="pop-color swatches"><span>Color</span>${COLOR_PRESETS.map(c => `<button class="swatch${spaceColor(sp).toLowerCase() === c ? ' on' : ''}" style="--sw:${c}" data-act="setColor" data-space="${sp.id}" data-v="${c}" aria-label="Color ${c}" title="${c}"></button>`).join('')}</div><div class="pop-color custom"><span>Custom</span>${sp.color ? `<button class="icon-btn" data-act="colorReset" data-space="${sp.id}" title="Back to the default color" aria-label="Reset color">↺</button>` : ''}<input type="color" class="color-in" data-f="spaceColor" data-space="${sp.id}" value="${spaceColor(sp)}" aria-label="${esc(sp.name)} ring color" title="Ring color"></div></div>` : ''}</div>
          <input class="txt-in" style="font-size:24px;font-weight:700" data-f="spaceName" data-space="${sp.id}" value="${esc(sp.name)}" aria-label="Space name"></div>
        <div class="row" style="margin-bottom:16px"><label class="field-inline">Daily goal <select class="sel" data-f="spaceGoal" data-space="${sp.id}">${[50, 60, 70, 80, 90, 100].map(g => `<option value="${g}"${g === goal ? ' selected' : ''}>${g}%</option>`).join('')}</select></label><span class="badge">Mark items Optional and they will not count against your goal</span></div>`
     : `<a class="back" href="#/home">‹ Home</a>
@@ -913,13 +881,12 @@ function customizeHTML() {
   return `<h2>Style</h2><p>Arrange Home and choose how everything looks.</p>
     <h4 class="sheet-h">Spaces on Home</h4>
     ${state.spaces.map((sp, i) => `<div class="sheet-row">${ico(iconName(sp), 18)}<span class="grow">${esc(sp.name)}</span>
-      ${sp.color ? `<button class="icon-btn" data-act="colorReset" data-space="${sp.id}" title="Back to the default color" aria-label="Reset color">↺</button>` : ''}<input type="color" class="color-in" data-f="spaceColor" data-space="${sp.id}" value="${spaceColor(sp)}" aria-label="${esc(sp.name)} ring color" title="Ring color">
       <button class="icon-btn" data-act="moveSpace" data-space="${sp.id}" data-n="-1" aria-label="Move up"${i === 0 ? ' disabled' : ''}>↑</button>
       <button class="icon-btn" data-act="moveSpace" data-space="${sp.id}" data-n="1" aria-label="Move down"${i === state.spaces.length - 1 ? ' disabled' : ''}>↓</button>
       <button class="chip small${sp.hidden ? '' : ' on'}" data-act="toggleSpace" data-space="${sp.id}">${sp.hidden ? 'Hidden' : 'Shown'}</button>
       <button class="icon-btn danger" data-act="delSpace" data-space="${sp.id}" title="Delete space" aria-label="Delete ${esc(sp.name)}">✕</button></div>`).join('')}
     <h4 class="sheet-h">Widgets</h4>
-    <div class="opt-row"><button class="chip${state.home.upNext ? ' on' : ''}" data-act="toggleWidget" data-k="upNext">Up next</button><button class="chip${state.home.pulse ? ' on' : ''}" data-act="toggleWidget" data-k="pulse">Last 7 days</button><button class="chip${state.home.journal ? ' on' : ''}" data-act="toggleWidget" data-k="journal">Journal</button><button class="chip${state.home.photo ? ' on' : ''}" data-act="toggleWidget" data-k="photo">Photo</button></div>
+    <div class="opt-row"><button class="chip${state.home.upNext ? ' on' : ''}" data-act="toggleWidget" data-k="upNext">Up next</button><button class="chip${state.home.pulse ? ' on' : ''}" data-act="toggleWidget" data-k="pulse">Last 7 days</button><button class="chip${state.home.photo ? ' on' : ''}" data-act="toggleWidget" data-k="photo">Photo</button></div>
     <h4 class="sheet-h">Look</h4>
     ${appearanceHTML()}
     <div class="row" style="justify-content:flex-end;margin-top:18px"><button class="btn primary" data-act="closeModal">Done</button></div>`;
@@ -936,7 +903,7 @@ function viewSettings() {
     <div class="head"><div class="grow"><h1>Settings</h1><div class="sub">Make it yours, then share it.</div></div></div>
     <section class="card">
       <div class="setting"><h4>Your name</h4><p>Used in the greeting.</p><input class="txt-in" style="max-width:280px;width:100%" data-f="name" value="${esc(state.name)}" placeholder="Name"></div>
-      <div class="setting"><h4>Style</h4><p>Theme, background, font, accent and ring colors, plus which spaces and widgets show on Home.</p><button class="btn primary" data-act="style">Open Style</button></div>
+      <div class="setting"><h4>Style</h4><p>Theme, background, font, accent color, plus which spaces and widgets show on Home.</p><button class="btn primary" data-act="style">Open Style</button></div>
       <div class="setting"><h4>Spaces and templates</h4><p>Spin up a new space from a template, or start blank.</p><button class="btn" data-act="newSpace">＋ New space</button></div>
     </section>
     <section class="card">
@@ -1013,14 +980,12 @@ function summaryFor(spaceId, date) {
   }
   if (lines.length === 3) lines.push('- (nothing checked off yet)');
   lines.push('', 'Still open:', ...(open.length ? open : ['- nothing']));
-  if (state.journal[date]) lines.push('', 'Notes:', state.journal[date]);
   return lines.join('\n');
 }
 
-// Week summary. Sections are every visible space plus the reflection, each switchable, so new spaces show up here automatically.
+// Week summary. Sections are every visible space, each switchable, so new spaces show up here automatically.
 ui.wsOff = new Set();
-const weekSections = ws => [...state.spaces.filter(s => !s.hidden).map(s => ({ id: s.id, name: s.name })),
-  ...(state.journal['w:' + ws] ? [{ id: 'reflection', name: 'Week reflection' }] : [])];
+const weekSections = () => state.spaces.filter(s => !s.hidden).map(s => ({ id: s.id, name: s.name }));
 const oneLine = t => t.replace(/\n+/g, ' ');
 function weekSummary(ws, off) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i)), created = state.created || todayKey();
@@ -1048,13 +1013,12 @@ function weekSummary(ws, off) {
     out.push('Done:', ...(done.length ? done : ['- nothing checked off']));
     if (open.length) out.push('Weekly items still open:', ...open);
   }
-  if (!off.has('reflection') && state.journal['w:' + ws]) out.push('', 'WEEK REFLECTION', state.journal['w:' + ws]);
   return out.join('\n');
 }
 function weekSummaryModal() {
   const ws = weekStart(ui.date);
   modal(`<h2>Week summary</h2><p>Choose what to include, then copy it into your weekly update.</p>
-    <div class="opt-row" id="ws-chips" style="margin-bottom:12px">${weekSections(ws).map(x => `<button class="chip${ui.wsOff.has(x.id) ? '' : ' on'}" data-act="wsToggle" data-id="${esc(x.id)}" aria-pressed="${!ui.wsOff.has(x.id)}">${esc(x.name)}</button>`).join('')}</div>
+    <div class="opt-row" id="ws-chips" style="margin-bottom:12px">${weekSections().map(x => `<button class="chip${ui.wsOff.has(x.id) ? '' : ' on'}" data-act="wsToggle" data-id="${esc(x.id)}" aria-pressed="${!ui.wsOff.has(x.id)}">${esc(x.name)}</button>`).join('')}</div>
     <textarea id="wsum-text" readonly style="font-family:inherit;font-size:14px;min-height:280px">${esc(weekSummary(ws, ui.wsOff))}</textarea>
     <div class="row" style="margin-top:10px;justify-content:flex-end"><button class="btn" data-act="closeModal">Close</button><button class="btn primary" data-act="copyEl" data-el="wsum-text">Copy</button></div>`);
 }
@@ -1099,6 +1063,7 @@ document.addEventListener('click', e => {
     case 'linkSuggest': addLink(d.space, d.t, d.u); break;
     case 'linkDel': { const sp = spaceById(d.space); sp.links = sp.links.filter(l => l.id !== d.link); save(); render(); break; }
     case 'linkMove': { const sp = spaceById(d.space); moveIn(sp.links, sp.links.findIndex(l => l.id === d.link), Number(d.n)); save(); render(); break; }
+    case 'setColor': spaceById(d.space).color = d.v; save(); render(); break;
     case 'colorReset': delete spaceById(d.space).color; save(); render(); refreshSheet(); break;
     case 'moveSpace': moveIn(state.spaces, state.spaces.findIndex(x => x.id === d.space), Number(d.n)); save(); render(); refreshSheet(); break;
     case 'toggleSpace': { const sp = spaceById(d.space); if (sp.hidden) delete sp.hidden; else sp.hidden = true; save(); render(); refreshSheet(); break; }
@@ -1106,10 +1071,6 @@ document.addEventListener('click', e => {
     case 'photoPick': $('#photo-file').click(); break;
     case 'photoRepo': ui.reposition = !ui.reposition; render(); break;
     case 'photoRemove': if (confirm('Remove this photo?')) { localStorage.removeItem(PHOTO_KEY); ui.reposition = false; render(); } break;
-    case 'journalAll': journalAllModal(); break;
-    case 'tagDel': { const k = todayKey(); state.jtags[k] = (state.jtags[k] || []).filter(x => x !== d.tag); if (!state.jtags[k].length) delete state.jtags[k]; save(); render(); break; }
-    case 'tagAdd': addTag(todayKey(), d.tag); break;
-    case 'tagFilter': ui.tagFilter = ui.tagFilter === d.tag ? null : d.tag; journalAllModal(); break;
     case 'gcal': window.open(gcalUrl(list, item, ui.date), '_blank', 'noopener'); break;
     case 'shift': ui.date = addDays(ui.date, Number(d.n)); render(); break;
     case 'goToday': ui.date = todayKey(); render(); break;
@@ -1127,9 +1088,6 @@ document.addEventListener('click', e => {
       save(); render(); break;
     }
     case 'delTask': list.items = list.items.filter(i => i.id !== item.id); ui.openNotes.delete(item.id); save(); render(); toast('Task deleted'); break;
-    case 'journalDel':
-      if (confirm('Delete this journal entry and its tags?')) { delete state.journal[d.key]; delete state.jtags[d.key]; save(); journalAllModal(); render(); }
-      break;
     case 'delItem': list.items = list.items.filter(i => i.id !== item.id); save(); render(); break;
     case 'moveItem': moveIn(list.items, list.items.indexOf(item), Number(d.n)); save(); render(); break;
     case 'addList': {
@@ -1217,7 +1175,6 @@ document.addEventListener('input', e => {
       const item = list.items.find(i => i.id === d.item);
       setEntry(list, item, ui.date, { note: t.value.trim() ? t.value : '' }); break;
     }
-    case 'journal': { state.journal[d.key] = t.value; if (!t.value) delete state.journal[d.key]; save(); const wc = t.closest('.journal-card')?.querySelector('.wc'); if (wc) wc.textContent = wordCount(t.value) + ' words'; break; }
     case 'photoCaption': state.home.photoCaption = t.value; save(); break;
     case 'dim': state.theme.dim = +t.value; save(); applyTheme(); t.previousElementSibling.querySelector('b').textContent = t.value + '%'; break;
     case 'bgblur': state.theme.bgblur = +t.value; save(); applyTheme(); t.previousElementSibling.querySelector('b').textContent = t.value + 'px'; break;
@@ -1225,7 +1182,7 @@ document.addEventListener('input', e => {
     case 'name': state.name = t.value.trim(); save(); break;
     case 'linkTitle': spaceById(d.space).links.find(l => l.id === d.link).title = t.value; save(); break;
     case 'linkUrl': { const u = normUrl(t.value); t.setAttribute('aria-invalid', u ? 'false' : 'true'); if (u) { spaceById(d.space).links.find(l => l.id === d.link).url = u; save(); } break; }
-    case 'spaceColor': spaceById(d.space).color = t.value; save(); if (!t.closest('main')) render(); break; // inside the sheet, preview live
+    case 'spaceColor': spaceById(d.space).color = t.value; save(); if (!t.closest('main')) render(); else $('.icon-now')?.style.setProperty('--sc', t.value); break; // in the icon popover, keep it open and tint the icon live
     case 'spaceName': spaceById(d.space).name = t.value; save(); break;
     case 'listName': list.name = t.value; save(); break;
     case 'itemText': list.items.find(i => i.id === d.item).text = t.value; save(); break;
@@ -1269,7 +1226,6 @@ document.addEventListener('keydown', e => {
     ui.focus = 'input[data-f="quickAdd"]'; $(ui.focus).focus(); ui.focus = null;
   }
   if ((d.f === 'newLinkTitle' || d.f === 'newLinkUrl') && $('#ql-url').value.trim()) { e.preventDefault(); addLink(d.space, $('#ql-title').value, $('#ql-url').value); return; }
-  if (d.f === 'tagAdd' && t.value.trim()) { e.preventDefault(); addTag(todayKey(), t.value); return; }
   if (d.f === 'newItem' && t.value.trim()) {
     listById(d.list).items.push({ id: uid(), text: t.value.trim() }); save();
     ui.focus = `#add-${d.list}`; render();
@@ -1341,7 +1297,7 @@ const Arrange = (() => {
 
   function start(item, e) {
     const r = item.getBoundingClientRect();
-    drag = { item, offX: e.clientX - r.left, offY: e.clientY - r.top };
+    drag = { item, offX: e.clientX - r.left, offY: e.clientY - r.top, lastSwap: -Infinity };
     item.classList.add('dragging');
     move(e);
   }
@@ -1351,29 +1307,33 @@ const Arrange = (() => {
     const r = item.getBoundingClientRect();
     item.style.transform = `translate(${e.clientX - drag.offX - r.left}px, ${e.clientY - drag.offY - r.top}px) scale(1.03)`;
   }
-  // Slide the pieces that got displaced from their old spot to their new one (FLIP), unhurried so the swap reads clearly.
+  // Slide displaced pieces from where they visibly are to their new spot (FLIP). Any slide still in flight is
+  // cancelled first, so a quick second swap continues from the current position instead of jumping.
   function slide(box, before) {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     for (const el of box.children) {
       const b = before.get(el); if (!b || el === drag?.item) continue;
       const a = el.getBoundingClientRect(), dx = b.left - a.left, dy = b.top - a.top;
-      if (!dx && !dy) continue;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
       // 'add' layers the slide on top of the jiggle instead of replacing it
-      el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'translate(0, 0)' }],
+      el._slide = el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'translate(0, 0)' }],
         { duration: 420, easing: 'cubic-bezier(.22,.8,.3,1)', composite: 'add' });
     }
   }
   function move(e) {
     const { item } = drag;
     follow(e);
+    if (e.timeStamp - drag.lastSwap < 280) return; // let the last swap settle so pieces never flip back and forth
     // Find the piece under the finger at the same level as the one being moved (a section, or a tile among tiles).
     let over = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-sort]');
     while (over && over.parentElement !== item.parentElement) over = over.parentElement?.closest('[data-sort]');
     if (over && over !== item) {
       const box = item.parentElement, sibs = [...box.children];
       const before = new Map(sibs.map(el => [el, el.getBoundingClientRect()]));
+      sibs.forEach(el => el._slide?.cancel());
       box.insertBefore(item, sibs.indexOf(over) > sibs.indexOf(item) ? over.nextSibling : over);
       slide(box, before);
+      drag.lastSwap = e.timeStamp;
       follow(e);
     }
   }
